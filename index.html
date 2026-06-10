@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deteksi Anomali Logistik Bawaslu — Isolation Forest</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+</head>
+<body>
+
+  <!-- ========== SIDEBAR ========== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <!-- Logo Bawaslu resmi -->
+      <img src="img/Logo.png.png" alt="Bawaslu" class="bawaslu-logo" />
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">NAVIGASI</div>
+      <a class="nav-item active" data-section="overview" onclick="switchSection('overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </a>
+      <a class="nav-item" data-section="scatter" onclick="switchSection('scatter')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="18" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="15" cy="14" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="6" r="2"/></svg>
+        Scatter Plot
+      </a>
+      <a class="nav-item" data-section="boxplot" onclick="switchSection('boxplot')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="6" width="8" height="12" rx="1"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+        Box Plot
+      </a>
+      <a class="nav-item" data-section="tabel" onclick="switchSection('tabel')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        Data Table
+      </a>
+
+      <div class="nav-section-label" style="margin-top:2rem">FILTER</div>
+
+      <div class="sidebar-filter">
+        <label class="filter-label">Provinsi</label>
+        <select id="filterProvinsi" onchange="applyFilters()">
+          <option value="all">Semua Provinsi</option>
+        </select>
+      </div>
+
+      <div class="sidebar-filter">
+        <label class="filter-label">Tahap Distribusi</label>
+        <select id="filterTahap" onchange="applyFilters()">
+          <option value="all">Semua Tahap</option>
+        </select>
+      </div>
+
+      <div class="sidebar-filter">
+        <label class="filter-label">Tampilkan Data</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btnAll" onclick="setLabelFilter('all')">Semua</button>
+          <button class="toggle-btn" id="btnAnomal" onclick="setLabelFilter('anomali')">Anomali</button>
+          <button class="toggle-btn" id="btnNormal" onclick="setLabelFilter('normal')">Normal</button>
+        </div>
+      </div>
+
+      <button class="reset-btn" onclick="resetFilters()">↺ Reset Filter</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span>Isolation Forest · 2024</span>
+    </div>
+  </aside>
+
+  <!-- ========== MAIN ========== -->
+  <main class="main">
+
+    <!-- HEADER -->
+    <header class="topbar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="topbar-title">
+        <h1>Deteksi Anomali Distribusi Logistik</h1>
+        <p>Algoritma Isolation Forest </p>
+      </div>
+      <div class="topbar-actions">
+        <div id="uploadStatus" class="upload-status hidden">
+          <span class="status-dot"></span>
+          <span id="uploadStatusText">Data dimuat</span>
+        </div>
+        <!-- Tombol Dark/Light Mode -->
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+          <span class="theme-icon-dark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          </span>
+          <span class="theme-icon-light">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </span>
+        </button>
+        <label class="upload-btn" for="fileInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload Excel
+        </label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileUpload(event)" />
+      </div>
+    </header>
+
+    <!-- ========== WELCOME SCREEN ========== -->
+    <section id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-card">
+        <div class="welcome-icon">
+          <img src="img/Logo.png.png" alt="Bawaslu" style="width:180px;opacity:.85;" />
+        </div>
+        <h2>Selamat Datang di Dashboard<br>Anomali Logistik Bawaslu</h2>
+        <p>Upload file Excel data distribusi logistik Anda untuk memulai analisis. Dashboard ini akan secara otomatis memvisualisasikan hasil deteksi anomali menggunakan Algoritma Isolation Forest dengan <strong>contamination = 0.05 (5%)</strong>.</p>
+        <div class="welcome-features">
+          <div class="feature-item">
+            <span class="feature-icon">📊</span>
+            <span>Scatter Plot Interaktif</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">📦</span>
+            <span>Box Plot Distribusi</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">🔴</span>
+            <span>Highlight Anomali</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">🗺️</span>
+            <span>Filter per Wilayah</span>
+          </div>
+        </div>
+        <label class="upload-btn-big" for="fileInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload File Excel (.xlsx)
+        </label>
+        <p class="welcome-note">Format kolom: <code>Jumlah_Logistik</code>, <code>Durasi_Pengiriman</code>, <code>Skor_Risiko</code>, <code>Provinsi</code>, dll.</p>
+      </div>
+    </section>
+
+    <!-- ========== DASHBOARD CONTENT ========== -->
+    <div id="dashboardContent" class="dashboard-content hidden">
+
+      <!-- SECTION: OVERVIEW -->
+      <section id="section-overview" class="section active">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon kpi-total">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="kpi-info">
+              <span class="kpi-label">Total Data</span>
+              <span class="kpi-value" id="kpiTotal">—</span>
+              <span class="kpi-sub">laporan distribusi</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-card-anomali">
+            <div class="kpi-icon kpi-anomali">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="kpi-info">
+              <span class="kpi-label">Anomali</span>
+              <span class="kpi-value" id="kpiAnomal">—</span>
+              <span class="kpi-sub">Contamination 5%</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-card-normal">
+            <div class="kpi-icon kpi-normal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="kpi-info">
+              <span class="kpi-label">Normal</span>
+              <span class="kpi-value" id="kpiNormal">—</span>
+              <span class="kpi-sub">distribusi berjalan baik</span>
+            </div>
+          </div>
+          <div class="kpi-card kpi-card-pct">
+            <div class="kpi-icon kpi-pct">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+            </div>
+            <div class="kpi-info">
+              <span class="kpi-label">Persentase Anomali</span>
+              <span class="kpi-value" id="kpiPct">—</span>
+              <span class="kpi-sub">dari total data (target 5%)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="overview-row">
+          <div class="chart-card full-width">
+            <div class="chart-header">
+              <div>
+                <h3>Distribusi Anomali per Provinsi</h3>
+                <p>Jumlah temuan anomali di tiap wilayah</p>
+              </div>
+              <div class="legend">
+                <span class="legend-dot anomali"></span> Anomali
+                <span class="legend-dot normal"></span> Normal
+              </div>
+            </div>
+            <div id="chartProvinsi" class="chart-area"></div>
+          </div>
+        </div>
+
+        <div class="overview-row two-col">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div><h3>Skor Risiko vs Status</h3><p>Anomali berdasarkan Skor Risiko</p></div>
+            </div>
+            <div id="chartRisiko" class="chart-area"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div><h3>Komposisi Status Pengiriman</h3><p>Tepat Waktu vs Terlambat</p></div>
+            </div>
+            <div id="chartPie" class="chart-area"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: SCATTER PLOT -->
+      <section id="section-scatter" class="section">
+        <div class="section-header">
+          <h2>Scatter Plot — Deteksi Anomali</h2>
+          <p>Visualisasi hasil Isolation Forest: titik <span style="color:#e63946;font-weight:600">merah</span> = anomali, <span style="color:#457b9d;font-weight:600">biru</span> = normal</p>
+        </div>
+        <div class="chart-card full-width large">
+          <div class="chart-header">
+            <div>
+              <h3>Jumlah Logistik × Durasi Pengiriman</h3>
+              <p>X: Jumlah Logistik &nbsp;·&nbsp; Y: Durasi Pengiriman (jam) &nbsp;·&nbsp; Ukuran: Skor Risiko</p>
+            </div>
+            <div class="legend">
+              <span class="legend-dot anomali"></span> Anomali (5% teratas)
+              <span class="legend-dot normal"></span> Normal
+            </div>
+          </div>
+          <div id="chartScatter" class="chart-area tall"></div>
+        </div>
+        <div class="overview-row two-col" style="margin-top:1.5rem">
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Skor Risiko × Jarak Km</h3><p>Anomali berdasarkan jarak pengiriman</p></div></div>
+            <div id="chartScatter2" class="chart-area"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Kerusakan × Kekurangan</h3><p>Pola anomali pada kerusakan & kekurangan logistik</p></div></div>
+            <div id="chartScatter3" class="chart-area"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: BOX PLOT -->
+      <section id="section-boxplot" class="section">
+        <div class="section-header">
+          <h2>Box Plot — Distribusi Data</h2>
+          <p>Visualisasi distribusi statistik untuk mendeteksi outlier pada setiap variabel numerik</p>
+        </div>
+        <div class="overview-row two-col">
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Jumlah Logistik</h3><p>Distribusi per label anomali</p></div></div>
+            <div id="boxJumlah" class="chart-area"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Durasi Pengiriman</h3><p>Distribusi per label anomali</p></div></div>
+            <div id="boxDurasi" class="chart-area"></div>
+          </div>
+        </div>
+        <div class="overview-row two-col" style="margin-top:1.5rem">
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Skor Risiko</h3><p>Distribusi per label anomali</p></div></div>
+            <div id="boxRisiko" class="chart-area"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div><h3>Jarak Pengiriman (Km)</h3><p>Distribusi per label anomali</p></div></div>
+            <div id="boxJarak" class="chart-area"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: TABEL -->
+      <section id="section-tabel" class="section">
+        <div class="section-header">
+          <h2>Data Table</h2>
+          <p>Lihat seluruh data mentah dengan highlight anomali</p>
+        </div>
+        <div class="chart-card full-width">
+          <div class="chart-header">
+            <div>
+              <h3>Tabel Data Distribusi Logistik</h3>
+              <span id="tableCount" class="badge">— baris</span>
+            </div>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <input type="text" id="tableSearch" placeholder="Cari ID / Wilayah..." class="table-search" oninput="filterTable()" />
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table id="dataTable">
+              <thead id="tableHead"></thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /dashboardContent -->
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
